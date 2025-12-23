@@ -1,0 +1,119 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<mujoco model="lecarm">
+  <compiler angle="radian" meshdir="assets" autolimits="true"/>
+  <default>
+    <default class="lecarm">
+      <joint frictionloss="0.1" armature="0.005"/>
+      <position kp="50" dampratio="1"/>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom group="3"/>
+      </default>
+    </default>
+  </default>
+  <worldbody>
+    <!-- Link base_link -->
+    <body name="base_link" pos="0 0 0" quat="1 0 0 0" childclass="lecarm">
+      <inertial pos="-6.41129e-05 8.45518e-07 -0.0273336" mass="0.362" fullinertia="0.000154171 0.000154109 0.00014817 5.20896e-08 -6.15426e-07 6.35504e-09"/>
+      <!-- Part base_link_parts -->
+      <geom type="mesh" class="visual" pos="-6.41129e-05 8.45518e-07 -0.0273336" quat="1 0 0 0" mesh="base_link_visual" material="base_link_visual_material"/>
+      <geom type="mesh" class="collision" pos="-6.41129e-05 8.45518e-07 -0.0273336" quat="1 0 0 0" mesh="base_link_collision" material="base_link_collision_material"/>
+      <!-- Link link_1 -->
+      <body name="link_1" pos="-3.27408e-33 0 -7.39557e-34" quat="1 -0 -8.32667e-17 -2.72472e-16">
+        <!-- Joint from base_link to link_1 -->
+        <joint axis="0 0 1" name="1" type="hinge"/>
+        <inertial pos="-0.00219475 0.0179139 0.0338242" mass="0.444751" fullinertia="0.000237284 0.000247172 0.000237006 2.44725e-06 3.69641e-06 -2.04564e-05"/>
+        <!-- Part link_1_parts -->
+        <geom type="mesh" class="visual" pos="-0.00219475 0.0179139 0.0338242" quat="1 -0 -2.22045e-16 -3.86729e-16" mesh="link_1_visual" material="link_1_visual_material"/>
+        <geom type="mesh" class="collision" pos="-0.00219475 0.0179139 0.0338242" quat="1 -0 -2.22045e-16 -3.86729e-16" mesh="link_1_collision" material="link_1_collision_material"/>
+        <!-- Link link_2 -->
+        <body name="link_2" pos="-0.027175 0.02 0.037" quat="0.5 0.5 -0.5 -0.5">
+          <!-- Joint from link_1 to link_2 -->
+          <joint axis="0 0 1" name="2" type="hinge"/>
+          <inertial pos="0.19584 9.32605e-05 -0.025455" mass="0.709516" fullinertia="0.000407443 0.00635039 0.00621043 1.86329e-05 -3.1692e-05 -7.42427e-07"/>
+          <!-- Part link_2_parts -->
+          <geom type="mesh" class="visual" pos="0.19584 9.32605e-05 -0.025455" quat="0.5 -0.5 0.5 0.5" mesh="link_2_visual" material="link_2_visual_material"/>
+          <geom type="mesh" class="collision" pos="0.19584 9.32605e-05 -0.025455" quat="0.5 -0.5 0.5 0.5" mesh="link_2_collision" material="link_2_collision_material"/>
+          <!-- Link link_3 -->
+          <body name="link_3" pos="0.264 5.68989e-16 5.20417e-17" quat="1 7.9169e-16 8.71525e-15 -1.89609e-15">
+            <!-- Joint from link_2 to link_3 -->
+            <joint axis="0 0 1" name="3" type="hinge"/>
+            <inertial pos="-0.179089 0.054481 -0.0272598" mass="0.588841" fullinertia="0.000419067 0.00511327 0.00516363 0.000560683 -7.09747e-05 1.24132e-05"/>
+            <!-- Part link_3_parts -->
+            <geom type="mesh" class="visual" pos="-0.179089 0.054481 -0.0272598" quat="0.5 -0.5 0.5 0.5" mesh="link_3_visual" material="link_3_visual_material"/>
+            <geom type="mesh" class="collision" pos="-0.179089 0.054481 -0.0272598" quat="0.5 -0.5 0.5 0.5" mesh="link_3_collision" material="link_3_collision_material"/>
+            <!-- Link link_4 -->
+            <body name="link_4" pos="-0.245 0.06 -0.0504" quat="1.81061e-15 -0.707107 0.707107 4.06307e-16">
+              <!-- Joint from link_3 to link_4 -->
+              <joint axis="0 0 1" name="4" type="hinge"/>
+              <inertial pos="-0.0508877 0.0613607 -0.0229646" mass="0.417218" fullinertia="0.000472054 0.000433549 0.000574725 0.000211282 -7.46746e-06 8.31181e-06"/>
+              <!-- Part link_4_parts -->
+              <geom type="mesh" class="visual" pos="-0.0508877 0.0613607 -0.0229646" quat="0.707107 5.16601e-15 -0.707107 -5.60558e-15" mesh="link_4_visual" material="link_4_visual_material"/>
+              <geom type="mesh" class="collision" pos="-0.0508877 0.0613607 -0.0229646" quat="0.707107 5.16601e-15 -0.707107 -5.60558e-15" mesh="link_4_collision" material="link_4_collision_material"/>
+              <!-- Link link_5 -->
+              <body name="link_5" pos="-0.042 0.074 -0.02325" quat="0.5 -0.5 0.5 -0.5">
+                <!-- Joint from link_4 to link_5 -->
+                <joint axis="0 0 1" name="5" type="hinge"/>
+                <inertial pos="0.00152285 1.29472e-06 0.0411038" mass="0.36625" fullinertia="0.000180916 0.000163912 0.000146194 -6.62368e-09 1.78748e-06 7.86476e-08"/>
+                <!-- Part link_5_parts -->
+                <geom type="mesh" class="visual" pos="0.00152285 1.29472e-06 0.0411038" quat="2.14801e-15 -0.707107 0.707107 7.33293e-16" mesh="link_5_visual" material="link_5_visual_material"/>
+                <geom type="mesh" class="collision" pos="0.00152285 1.29472e-06 0.0411038" quat="2.14801e-15 -0.707107 0.707107 7.33293e-16" mesh="link_5_collision" material="link_5_collision_material"/>
+                <!-- Link link_6 -->
+                <body name="link_6" pos="-0.0225 -4.42242e-15 0.042" quat="0.612372 0.353553 -0.612372 -0.353553">
+                  <!-- Joint from link_5 to link_6 -->
+                  <joint axis="0 0 1" name="6" type="hinge"/>
+                  <inertial pos="-1.68757e-05 -9.6197e-05 0.0357891" mass="0.34613" fullinertia="0.000156095 0.000155915 0.000142738 -2.15276e-07 -1.84974e-07 -7.22974e-07"/>
+                  <!-- Part link_6_parts -->
+                  <geom type="mesh" class="visual" pos="-1.68757e-05 -9.6197e-05 0.0357891" quat="0.683013 0.683013 -0.183013 -0.183013" mesh="link_6_visual" material="link_6_visual_material"/>
+                  <geom type="mesh" class="collision" pos="-1.68757e-05 -9.6197e-05 0.0357891" quat="0.683013 0.683013 -0.183013 -0.183013" mesh="link_6_collision" material="link_6_collision_material"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <asset>
+    <mesh file="link_5_collision.stl"/>
+    <mesh file="link_6_visual.stl"/>
+    <mesh file="link_4_visual.stl"/>
+    <mesh file="base_link_collision.stl"/>
+    <mesh file="link_1_visual.stl"/>
+    <mesh file="link_5_visual.stl"/>
+    <mesh file="link_4_collision.stl"/>
+    <mesh file="link_1_collision.stl"/>
+    <mesh file="base_link_visual.stl"/>
+    <mesh file="link_3_visual.stl"/>
+    <mesh file="link_3_collision.stl"/>
+    <mesh file="link_2_visual.stl"/>
+    <mesh file="link_2_collision.stl"/>
+    <mesh file="link_6_collision.stl"/>
+    <material name="base_link_visual_material" rgba="0.917647 0.917647 0.917647 1"/>
+    <material name="base_link_collision_material" rgba="0.917647 0.917647 0.917647 1"/>
+    <material name="link_1_visual_material" rgba="0.697405 0.697405 0.697405 1"/>
+    <material name="link_1_collision_material" rgba="0.697405 0.697405 0.697405 1"/>
+    <material name="link_2_visual_material" rgba="0.779591 0.779591 0.779591 1"/>
+    <material name="link_2_collision_material" rgba="0.779591 0.779591 0.779591 1"/>
+    <material name="link_3_visual_material" rgba="0.514023 0.534002 0.549986 1"/>
+    <material name="link_3_collision_material" rgba="0.514023 0.534002 0.549986 1"/>
+    <material name="link_4_visual_material" rgba="0.520598 0.548796 0.571354 1"/>
+    <material name="link_4_collision_material" rgba="0.520598 0.548796 0.571354 1"/>
+    <material name="link_5_visual_material" rgba="0.599639 0.631761 0.657459 1"/>
+    <material name="link_5_collision_material" rgba="0.599639 0.631761 0.657459 1"/>
+    <material name="link_6_visual_material" rgba="0.579062 0.613052 0.640243 1"/>
+    <material name="link_6_collision_material" rgba="0.579062 0.613052 0.640243 1"/>
+  </asset>
+  <actuator>
+    <position class="lecarm" name="1" joint="1"/>
+    <position class="lecarm" name="2" joint="2"/>
+    <position class="lecarm" name="3" joint="3"/>
+    <position class="lecarm" name="4" joint="4"/>
+    <position class="lecarm" name="5" joint="5"/>
+    <position class="lecarm" name="6" joint="6"/>
+  </actuator>
+  <equality/>
+</mujoco>
