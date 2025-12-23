@@ -5,6 +5,7 @@ import os
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
+from damiao_motor import DaMiaoController, DaMiaoMotor
 
 import numpy as np
 
