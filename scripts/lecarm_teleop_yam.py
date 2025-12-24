@@ -4,6 +4,12 @@ This script uses the physical LeCARM robot as a leader to teleoperate
 the physical YAM arm. The physical LeCARM is put in gravity compensation
 mode so it can be moved manually, and YAM follows its joint positions.
 
+The script has two modes:
+    - slow_sync: When joints are too far apart (> threshold), YAM gradually
+      syncs up to avoid sudden jumps
+    - following: When joints are within threshold, YAM directly follows
+      LeCARM's joint positions
+
 Usage:
     uv run python scripts/lecarm_teleop_yam.py
     
@@ -13,6 +19,8 @@ Usage:
         --rate RATE                         Control loop rate in Hz (default: 200)
         --kp KP                             Position gain for YAM PD control (default: 80.0)
         --kd KD                             Velocity damping for YAM PD control (default: 5.0)
+        --sync-threshold THRESHOLD          Max joint error (rad) to switch modes (default: 0.2)
+        --max-sync-speed SPEED              Max joint speed for slow_sync mode in rad/s (default: 0.5)
         --enable-visualizer                 Enable MuJoCo visualization of both robots
 """
 
@@ -153,6 +161,18 @@ def main():
         action="store_true",
         help="Enable MuJoCo visualization of both robots",
     )
+    parser.add_argument(
+        "--sync-threshold",
+        type=float,
+        default=0.2,
+        help="Maximum joint error (rad) to switch from slow_sync to following mode (default: 0.2)",
+    )
+    parser.add_argument(
+        "--max-sync-speed",
+        type=float,
+        default=0.5,
+        help="Maximum joint speed for slow_sync mode in rad/s (default: 0.5)",
+    )
     
     args = parser.parse_args()
     
@@ -274,9 +294,14 @@ def main():
         print("✓ MuJoCo models loaded")
     
     period = 1.0 / args.rate
+    max_sync_step = args.max_sync_speed * period  # Maximum change per control cycle
     print(f"\nControl rate: {args.rate} Hz")
+    print(f"Sync threshold: {args.sync_threshold} rad")
+    print(f"Max sync speed: {args.max_sync_speed} rad/s (max step: {max_sync_step:.4f} rad/cycle)")
     print("LeCARM is in gravity compensation mode - you can move it manually")
     print("YAM will follow LeCARM's joint positions")
+    print("  - slow_sync mode: when joints are far apart (> {:.2f} rad)".format(args.sync_threshold))
+    print("  - following mode: when joints are close (< {:.2f} rad)".format(args.sync_threshold))
     print("Press Ctrl+C to stop\n")
     
     # Send initial zero commands to LeCARM and enable gravity compensation
@@ -350,6 +375,10 @@ def main():
         time.sleep(0.5)  # Give viewers time to start
     
     try:
+        # Initialize mode tracking and rate-limited target
+        current_mode = "slow_sync"  # Start in slow_sync mode
+        yam_full_current_pos = yam_robot.get_joint_pos()
+        rate_limited_target = yam_full_current_pos[:6].copy()  # Initialize rate-limited target to current position
         
         # Main control loop
         while True:
@@ -367,16 +396,69 @@ def main():
             lecarm_robot.send_gravity_compensation_only()
             
             # Map LeCARM positions to YAM using joint mapping from config
-            yam_target_pos = apply_joint_mapping(lecarm_joint_pos, joint_mapping)
+            # This is the final target from the leader
+            yam_final_target = apply_joint_mapping(lecarm_joint_pos, joint_mapping)
+            
+            # Get current YAM position (full state, may include gripper)
+            yam_full_current_pos = yam_robot.get_joint_pos()
+            yam_current_pos = yam_full_current_pos[:6]  # Arm joints only
+            
+            # Calculate joint error between rate-limited target and final target
+            # This determines if we're close enough to switch to following mode
+            joint_error = np.abs(yam_final_target - yam_current_pos)
+            max_error = np.max(joint_error)
+            
+            # Determine mode based on error
+            if max_error > args.sync_threshold:
+                # Joints are too far apart - use slow_sync mode
+                if current_mode != "slow_sync":
+                    current_mode = "slow_sync"
+                    print(f"Switched to slow_sync mode (max error: {max_error:.3f} rad)")
+                
+                # Rate limit the target towards the final target
+                # Calculate desired change from current rate-limited target to final target
+                desired_change = yam_final_target - rate_limited_target
+                # Limit the change to max_sync_step per control cycle
+                change_magnitude = np.abs(desired_change)
+                # Scale down if any joint exceeds max speed
+                scale_factor = np.ones(6)
+                exceeds_limit = change_magnitude > max_sync_step
+                if np.any(exceeds_limit):
+                    # For joints that exceed limit, scale to max_sync_step
+                    scale_factor[exceeds_limit] = max_sync_step / change_magnitude[exceeds_limit]
+                
+                # Update rate-limited target (not based on current position, but on previous rate-limited target)
+                rate_limited_target = rate_limited_target + desired_change * scale_factor
+            else:
+                # Joints are close enough - use following mode
+                if current_mode != "following":
+                    current_mode = "following"
+                    print(f"Switched to following mode (max error: {max_error:.3f} rad)")
+                    # When switching to following mode, directly set rate-limited target to final target
+                    rate_limited_target = yam_final_target.copy()
+                else:
+                    # In following mode, directly track the final target
+                    rate_limited_target = yam_final_target.copy()
+            
+            # Command the rate-limited target (not the final target directly)
+            yam_command_arm_pos = rate_limited_target
+            
+            # Build full command position (preserve gripper if present)
+            if len(yam_full_current_pos) > 6:
+                # Robot has gripper, preserve its current position
+                yam_command_pos = np.concatenate([yam_command_arm_pos, yam_full_current_pos[6:]])
+            else:
+                # No gripper, just use arm positions
+                yam_command_pos = yam_command_arm_pos
             
             # Command YAM to follow LeCARM's joint positions
             # YAM robot handles joint limit clamping internally
-            yam_robot.command_joint_pos(yam_target_pos)
+            yam_robot.command_joint_pos(yam_command_pos)
             
             # Update MuJoCo visualization if enabled
             if args.enable_visualizer:
-                # Update YAM visualization
-                yam_data.qpos[:yam_model.nq] = yam_target_pos[:yam_model.nq]
+                # Update YAM visualization (use command position, which may be interpolated)
+                yam_data.qpos[:yam_model.nq] = yam_command_pos[:yam_model.nq]
                 
                 # Update LeCARM visualization
                 lecarm_data.qpos[:lecarm_model.nq] = lecarm_joint_pos[:lecarm_model.nq]
