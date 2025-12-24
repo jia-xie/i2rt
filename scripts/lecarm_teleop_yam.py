@@ -19,8 +19,10 @@ Usage:
         --rate RATE                         Control loop rate in Hz (default: 200)
         --kp KP                             Position gain for YAM PD control (default: 80.0)
         --kd KD                             Velocity damping for YAM PD control (default: 5.0)
-        --sync-threshold THRESHOLD          Max joint error (rad) to switch modes (default: 0.2)
+        --slow-sync-threshold THRESHOLD     Joint error (rad) to switch to slow_sync mode (default: 0.5)
+        --following-threshold THRESHOLD     Joint error (rad) to switch to following mode (default: 0.2)
         --max-sync-speed SPEED              Max joint speed for slow_sync mode in rad/s (default: 0.5)
+        --max-following-speed SPEED         Max joint speed for following mode in rad/s (default: 2.0)
         --enable-visualizer                 Enable MuJoCo visualization of both robots
 """
 
@@ -162,16 +164,28 @@ def main():
         help="Enable MuJoCo visualization of both robots",
     )
     parser.add_argument(
-        "--sync-threshold",
+        "--slow-sync-threshold",
+        type=float,
+        default=0.5,
+        help="Joint error (rad) to switch from following to slow_sync mode (default: 0.5)",
+    )
+    parser.add_argument(
+        "--following-threshold",
         type=float,
         default=0.2,
-        help="Maximum joint error (rad) to switch from slow_sync to following mode (default: 0.2)",
+        help="Joint error (rad) to switch from slow_sync to following mode (default: 0.2)",
     )
     parser.add_argument(
         "--max-sync-speed",
         type=float,
         default=0.5,
         help="Maximum joint speed for slow_sync mode in rad/s (default: 0.5)",
+    )
+    parser.add_argument(
+        "--max-following-speed",
+        type=float,
+        default=2.0,
+        help="Maximum joint speed for following mode in rad/s (default: 2.0)",
     )
     
     args = parser.parse_args()
@@ -294,14 +308,17 @@ def main():
         print("✓ MuJoCo models loaded")
     
     period = 1.0 / args.rate
-    max_sync_step = args.max_sync_speed * period  # Maximum change per control cycle
+    max_sync_step = args.max_sync_speed * period  # Maximum change per control cycle for slow_sync
+    max_following_step = args.max_following_speed * period  # Maximum change per control cycle for following
     print(f"\nControl rate: {args.rate} Hz")
-    print(f"Sync threshold: {args.sync_threshold} rad")
+    print(f"Slow sync threshold: {args.slow_sync_threshold} rad (switch to slow_sync)")
+    print(f"Following threshold: {args.following_threshold} rad (switch to following)")
     print(f"Max sync speed: {args.max_sync_speed} rad/s (max step: {max_sync_step:.4f} rad/cycle)")
+    print(f"Max following speed: {args.max_following_speed} rad/s (max step: {max_following_step:.4f} rad/cycle)")
     print("LeCARM is in gravity compensation mode - you can move it manually")
     print("YAM will follow LeCARM's joint positions")
-    print("  - slow_sync mode: when joints are far apart (> {:.2f} rad)".format(args.sync_threshold))
-    print("  - following mode: when joints are close (< {:.2f} rad)".format(args.sync_threshold))
+    print("  - slow_sync mode: when joints are far apart (> {:.2f} rad)".format(args.slow_sync_threshold))
+    print("  - following mode: when joints are close (< {:.2f} rad)".format(args.following_threshold))
     print("Press Ctrl+C to stop\n")
     
     # Send initial zero commands to LeCARM and enable gravity compensation
@@ -379,6 +396,7 @@ def main():
         current_mode = "slow_sync"  # Start in slow_sync mode
         yam_full_current_pos = yam_robot.get_joint_pos()
         rate_limited_target = yam_full_current_pos[:6].copy()  # Initialize rate-limited target to current position
+        print(f"Starting in slow_sync mode (will switch to following when error < {args.following_threshold:.3f} rad)\n")
         
         # Main control loop
         while True:
@@ -403,19 +421,30 @@ def main():
             yam_full_current_pos = yam_robot.get_joint_pos()
             yam_current_pos = yam_full_current_pos[:6]  # Arm joints only
             
-            # Calculate joint error between rate-limited target and final target
-            # This determines if we're close enough to switch to following mode
+            # Calculate joint error between current position and final target
+            # This determines which mode we should be in
             joint_error = np.abs(yam_final_target - yam_current_pos)
             max_error = np.max(joint_error)
             
-            # Determine mode based on error
-            if max_error > args.sync_threshold:
-                # Joints are too far apart - use slow_sync mode
-                if current_mode != "slow_sync":
+            # Determine mode based on error with hysteresis
+            # Use slow_sync_threshold to switch TO slow_sync (when error gets large)
+            # Use following_threshold to switch TO following (when error gets small)
+            if current_mode == "slow_sync":
+                # In slow_sync mode, switch to following when error is small enough
+                if max_error <= args.following_threshold:
+                    current_mode = "following"
+                    print(f"Switched to following mode (max error: {max_error:.3f} rad)")
+                    # When switching to following mode, directly set rate-limited target to final target
+                    rate_limited_target = yam_final_target.copy()
+            else:  # current_mode == "following"
+                # In following mode, switch to slow_sync when error is too large
+                if max_error > args.slow_sync_threshold:
                     current_mode = "slow_sync"
                     print(f"Switched to slow_sync mode (max error: {max_error:.3f} rad)")
-                
-                # Rate limit the target towards the final target
+            
+            # Apply rate limiting based on current mode
+            if current_mode == "slow_sync":
+                # Rate limit the target towards the final target (slow speed)
                 # Calculate desired change from current rate-limited target to final target
                 desired_change = yam_final_target - rate_limited_target
                 # Limit the change to max_sync_step per control cycle
@@ -429,16 +458,21 @@ def main():
                 
                 # Update rate-limited target (not based on current position, but on previous rate-limited target)
                 rate_limited_target = rate_limited_target + desired_change * scale_factor
-            else:
-                # Joints are close enough - use following mode
-                if current_mode != "following":
-                    current_mode = "following"
-                    print(f"Switched to following mode (max error: {max_error:.3f} rad)")
-                    # When switching to following mode, directly set rate-limited target to final target
-                    rate_limited_target = yam_final_target.copy()
-                else:
-                    # In following mode, directly track the final target
-                    rate_limited_target = yam_final_target.copy()
+            else:  # following mode
+                # Rate limit the target towards the final target (fast speed)
+                # Calculate desired change from current rate-limited target to final target
+                desired_change = yam_final_target - rate_limited_target
+                # Limit the change to max_following_step per control cycle
+                change_magnitude = np.abs(desired_change)
+                # Scale down if any joint exceeds max speed
+                scale_factor = np.ones(6)
+                exceeds_limit = change_magnitude > max_following_step
+                if np.any(exceeds_limit):
+                    # For joints that exceed limit, scale to max_following_step
+                    scale_factor[exceeds_limit] = max_following_step / change_magnitude[exceeds_limit]
+                
+                # Update rate-limited target
+                rate_limited_target = rate_limited_target + desired_change * scale_factor
             
             # Command the rate-limited target (not the final target directly)
             yam_command_arm_pos = rate_limited_target
