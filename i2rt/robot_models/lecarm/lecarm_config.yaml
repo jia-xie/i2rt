@@ -1,0 +1,38 @@
+# LeCARM Robot Configuration
+# This file contains configuration parameters for the LeCARM robot
+
+# Motor configuration
+motor_ids: [1, 2, 3, 4, 5, 6]
+feedback_ids: null  # If null, uses same as motor_ids
+bitrate: 1000000  # CAN bus bitrate
+can_interface: "can0"  # Default CAN interface
+
+# Gravity compensation coefficients for each joint
+# These coefficients scale the computed gravity compensation torques
+gravity_coefficients: [1.0, 1.0, 0.8, 2.35, 1.0, 1.0]
+
+# Joint mapping directions for teleoperation
+# Maps LeCARM joint indices to YAM joint indices with direction
+# Format: [lecarm_joint_index: yam_joint_index, direction]
+# Direction: 1 for same direction, -1 for inverted direction
+# Example: {0: [0, 1], 1: [1, 1], ...} means:
+#   LeCARM joint 0 -> YAM joint 0, same direction
+#   LeCARM joint 1 -> YAM joint 1, same direction
+joint_mapping:
+  - target_joint: 0  # YAM joint index
+    direction: 1     # 1 for same direction, -1 for inverted
+  - target_joint: 1
+    direction: 1
+  - target_joint: 2
+    direction: -1
+  - target_joint: 3
+    direction: 1
+  - target_joint: 4
+    direction: 1
+  - target_joint: 5
+    direction: 1
+
+# Alternative format: direct mapping with directions per joint
+# This allows for remapping LeCARM joints to different YAM joints if needed
+# joint_directions: [1, 1, 1, 1, 1, 1]  # Direction multipliers for each joint
+
