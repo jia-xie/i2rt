@@ -295,42 +295,51 @@ def main():
     
     # Setup MuJoCo visualization threads if enabled
     visualizer_threads = []
+    viewer_shutdown = threading.Event()
     if args.enable_visualizer:
         import mujoco.viewer
         
         def yam_viewer_thread():
             """Separate thread for YAM viewer."""
-            with mujoco.viewer.launch_passive(
-                model=yam_model,
-                data=yam_data,
-                show_left_ui=False,
-                show_right_ui=False,
-            ) as viewer:
-                mujoco.mjv_defaultFreeCamera(yam_model, viewer.cam)
-                viewer.cam.lookat[:] = [0.3, 0, 0.2]
-                viewer.cam.distance = 1.5
-                
-                while viewer.is_running():
-                    mujoco.mj_kinematics(yam_model, yam_data)
-                    viewer.sync()
-                    time.sleep(0.01)
+            try:
+                with mujoco.viewer.launch_passive(
+                    model=yam_model,
+                    data=yam_data,
+                    show_left_ui=False,
+                    show_right_ui=False,
+                ) as viewer:
+                    mujoco.mjv_defaultFreeCamera(yam_model, viewer.cam)
+                    viewer.cam.lookat[:] = [0.3, 0, 0.2]
+                    viewer.cam.distance = 1.5
+                    
+                    while viewer.is_running() and not viewer_shutdown.is_set():
+                        mujoco.mj_kinematics(yam_model, yam_data)
+                        viewer.sync()
+                        time.sleep(0.01)
+            except Exception:
+                # Suppress errors during shutdown
+                pass
         
         def lecarm_viewer_thread():
             """Separate thread for LeCARM viewer."""
-            with mujoco.viewer.launch_passive(
-                model=lecarm_model,
-                data=lecarm_data,
-                show_left_ui=False,
-                show_right_ui=False,
-            ) as viewer:
-                mujoco.mjv_defaultFreeCamera(lecarm_model, viewer.cam)
-                viewer.cam.lookat[:] = [0.3, 0, 0.2]
-                viewer.cam.distance = 1.5
-                
-                while viewer.is_running():
-                    mujoco.mj_kinematics(lecarm_model, lecarm_data)
-                    viewer.sync()
-                    time.sleep(0.01)
+            try:
+                with mujoco.viewer.launch_passive(
+                    model=lecarm_model,
+                    data=lecarm_data,
+                    show_left_ui=False,
+                    show_right_ui=False,
+                ) as viewer:
+                    mujoco.mjv_defaultFreeCamera(lecarm_model, viewer.cam)
+                    viewer.cam.lookat[:] = [0.3, 0, 0.2]
+                    viewer.cam.distance = 1.5
+                    
+                    while viewer.is_running() and not viewer_shutdown.is_set():
+                        mujoco.mj_kinematics(lecarm_model, lecarm_data)
+                        viewer.sync()
+                        time.sleep(0.01)
+            except Exception:
+                # Suppress errors during shutdown
+                pass
         
         print("Starting MuJoCo viewers...")
         yam_thread = threading.Thread(target=yam_viewer_thread, daemon=True)
@@ -386,6 +395,11 @@ def main():
         traceback.print_exc()
     finally:
         print("\nDisconnecting robots...")
+        # Signal viewers to shutdown first to avoid GLX errors
+        if args.enable_visualizer:
+            viewer_shutdown.set()
+            # Give viewer threads time to exit gracefully
+            time.sleep(0.2)
         lecarm_robot.disconnect()
         yam_robot.close()
         print("Disconnected from all hardware")
