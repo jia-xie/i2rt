@@ -210,6 +210,109 @@ def apply_rate_limiting(
     return new_target
 
 
+def return_to_home_position(
+    lecarm_robot: LeCARMRobot,
+    yam_leader_robot,
+    yam_follower_robot,
+    period: float,
+    max_speed: float = 0.5,
+):
+    """
+    Smoothly return all robots to home position (zero).
+    
+    Args:
+        lecarm_robot: LeCARM robot instance
+        yam_leader_robot: YAM leader robot instance
+        yam_follower_robot: YAM follower robot instance
+        period: Control loop period in seconds
+        max_speed: Maximum joint speed in rad/s (default: 0.5)
+    """
+    print("\nReturning all robots to home position...")
+    max_step = max_speed * period
+    
+    # Home position is zero for all joints
+    home_pos = np.zeros(6)
+    
+    # Get current positions
+    lecarm_current = lecarm_robot.get_joint_pos()
+    yam_leader_current = yam_leader_robot.get_joint_pos()[:6]
+    yam_follower_current = yam_follower_robot.get_joint_pos()[:6]
+    
+    # Initialize rate-limited targets
+    lecarm_target = lecarm_current.copy()
+    yam_leader_target = yam_leader_current.copy()
+    yam_follower_target = yam_follower_current.copy()
+    
+    # Check if we need to move (if already at home, skip)
+    lecarm_error = np.max(np.abs(lecarm_current - home_pos))
+    yam_leader_error = np.max(np.abs(yam_leader_current - home_pos))
+    yam_follower_error = np.max(np.abs(yam_follower_current - home_pos))
+    
+    if lecarm_error < 0.01 and yam_leader_error < 0.01 and yam_follower_error < 0.01:
+        print("All robots already at home position")
+        return
+    
+    # Move to home position with rate limiting
+    max_iterations = 500  # Safety limit
+    iteration = 0
+    convergence_threshold = 0.01  # rad
+    
+    while iteration < max_iterations:
+        iteration += 1
+        
+        # Update rate-limited targets
+        lecarm_target = apply_rate_limiting(lecarm_target, home_pos, max_step)
+        yam_leader_target = apply_rate_limiting(yam_leader_target, home_pos, max_step)
+        yam_follower_target = apply_rate_limiting(yam_follower_target, home_pos, max_step)
+        
+        # Command robots
+        try:
+            # LeCARM with small gains for smooth movement
+            lecarm_kp = np.array([20.0, 20.0, 20.0, 10.0, 5.0, 5.0])
+            lecarm_kd = np.array([2.0, 2.0, 2.0, 1.0, 1.0, 1.0])
+            lecarm_robot.command_joint_pos(lecarm_target, kp=lecarm_kp, kd=lecarm_kd, use_gravity_comp=True)
+        except:
+            pass
+        
+        try:
+            # YAM leader - preserve gripper if present
+            yam_leader_full_current = yam_leader_robot.get_joint_pos()
+            if len(yam_leader_full_current) > 6:
+                yam_leader_command = np.concatenate([yam_leader_target, yam_leader_full_current[6:]])
+            else:
+                yam_leader_command = yam_leader_target
+            yam_leader_robot.command_joint_pos(yam_leader_command)
+        except:
+            pass
+        
+        try:
+            # YAM follower - preserve gripper if present
+            yam_follower_full_current = yam_follower_robot.get_joint_pos()
+            if len(yam_follower_full_current) > 6:
+                yam_follower_command = np.concatenate([yam_follower_target, yam_follower_full_current[6:]])
+            else:
+                yam_follower_command = yam_follower_target
+            yam_follower_robot.command_joint_pos(yam_follower_command)
+        except:
+            pass
+        
+        # Check convergence
+        lecarm_error = np.max(np.abs(lecarm_target - home_pos))
+        yam_leader_error = np.max(np.abs(yam_leader_target - home_pos))
+        yam_follower_error = np.max(np.abs(yam_follower_target - home_pos))
+        
+        if lecarm_error < convergence_threshold and \
+           yam_leader_error < convergence_threshold and \
+           yam_follower_error < convergence_threshold:
+            print("All robots reached home position")
+            break
+        
+        time.sleep(period)
+    
+    if iteration >= max_iterations:
+        print("Warning: Timeout while returning to home position")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Human-in-the-loop teleoperation with mode switching"
@@ -767,13 +870,29 @@ def main():
         import traceback
         traceback.print_exc()
     finally:
-        print("\nDisconnecting robots...")
+        print("\nShutting down...")
         # Restore terminal settings first
         keyboard.stop()
-        # Signal viewers to shutdown first
+        
+        # Return all robots to home position before disconnecting
+        try:
+            return_to_home_position(
+                lecarm_robot,
+                yam_leader_robot,
+                yam_follower_robot,
+                period,
+                max_speed=0.5,
+            )
+        except Exception as e:
+            print(f"Error returning to home position: {e}")
+        
+        # Signal viewers to shutdown
         if args.enable_visualizer:
             viewer_shutdown.set()
             time.sleep(0.2)
+        
+        # Disconnect robots
+        print("Disconnecting robots...")
         try:
             lecarm_robot.disconnect()
         except:
