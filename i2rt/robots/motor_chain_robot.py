@@ -296,8 +296,8 @@ class MotorChainRobot(Robot):
         with self._command_lock:
             joint_commands = copy.deepcopy(self._commands)
         with self._state_lock:
-            g = self._compute_gravity_compensation(self._joint_state)
-            motor_torques = joint_commands.torques + g * self.gravity_comp_factor
+            self.g = self._compute_gravity_compensation(self._joint_state)
+            motor_torques = joint_commands.torques + self.g * self.gravity_comp_factor
             motor_torques = np.clip(motor_torques, -self._clip_motor_torque, self._clip_motor_torque)
 
             if self._gripper_index is not None:
@@ -494,6 +494,10 @@ class MotorChainRobot(Robot):
                 result["temp_mos"] = self._joint_state.temp_mos
                 result["temp_rotor"] = self._joint_state.temp_rotor
             return result
+
+    def get_compensated_torque(self) -> np.ndarray:
+        with self._state_lock:
+            return self.g * self.gravity_comp_factor
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         """Exit the runtime context related to this object."""

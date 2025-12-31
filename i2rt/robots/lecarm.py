@@ -319,6 +319,33 @@ class LeCARMRobot:
             except Exception as e:
                 logging.warning(f"Motor {i+1} failed to send command: {e}")
 
+    def send_gravity_compensation_and_force_feedback(self, feedback_torque: np.ndarray, kp: Optional[np.ndarray] = np.zeros(6), kd: Optional[np.ndarray] = np.zeros(6)) -> None:
+        """Send gravity compensation and force feedback torques. And optionally kp and kd.
+        
+        """
+        if not self._connected:
+            logging.warning("Robot not connected. Call connect() first.")
+            return
+
+        current_pos = self.get_joint_pos()
+        gravity_torques = self.compute_gravity_compensation(current_pos)
+
+        # Send commands with gravity compensation and force feedback torques
+        for i, (motor, torque) in enumerate(zip(self.motors, gravity_torques)):
+            if motor is None:
+                continue
+            try:
+                motor.send_cmd(
+                    target_position=0.0,
+                    target_velocity=0.0,
+                    stiffness=kp[i],
+                    damping=kd[i],
+                    feedforward_torque=torque + feedback_torque[i],
+                    control_mode="MIT",
+                )
+            except Exception as e:
+                logging.warning(f"Motor {i+1} failed to send command: {e}")
+
     def num_dofs(self) -> int:
         """Get number of degrees of freedom."""
         return self._num_dofs
